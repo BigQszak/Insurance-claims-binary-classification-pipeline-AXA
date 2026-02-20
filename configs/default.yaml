@@ -1,0 +1,38 @@
+data:
+  url: "https://github.com/dutangc/CASdatasets/raw/refs/heads/master/data/pg15training.rda"
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+
+features:
+  target_column: "Numtppd"
+  drop_columns:
+    - "Numtppd"
+    - "Numtpbi"
+    - "Indtppd"
+    - "Indtpbi"
+  categorical_columns:
+    - "CalYear"
+    - "Gender"
+    - "Type"
+    - "Category"
+    - "Occupation"
+    - "SubGroup2"
+    - "Group2"
+    - "Group1"
+
+model:
+  test_size: 0.2
+  random_seed: 42
+  n_trials: 20
+  hyperparameter_space:
+    n_estimators: [10, 200]
+    learning_rate: [0.001, 0.3]
+    max_depth: [3, 10]
+    num_leaves: [20, 150]
+    min_child_samples: [5, 100]
+    subsample: [0.5, 1.0]
+    colsample_bytree: [0.5, 1.0]
+
+artifacts:
+  metrics_dir: "artifacts/metrics"
+  model_dir: "artifacts/models"
