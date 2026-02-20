@@ -2,6 +2,8 @@ data:
   url: "https://github.com/dutangc/CASdatasets/raw/refs/heads/master/data/pg15training.rda"
   raw_dir: "data/raw"
   processed_dir: "data/processed"
+  dataset_filename: "pg15training.csv"
+  rda_key: "pg15training"
 
 features:
   target_column: "Numtppd"

@@ -13,6 +13,8 @@ class DataConfig(BaseModel):
     url: str
     raw_dir: str = "data/raw"
     processed_dir: str = "data/processed"
+    dataset_filename: str = "pg15training.csv"
+    rda_key: str = "pg15training"
 
 
 class FeaturesConfig(BaseModel):
