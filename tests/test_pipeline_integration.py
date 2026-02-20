@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -12,8 +13,6 @@ from axa_ml.pipeline import run_pipeline
 
 def _make_synthetic_csv(path: Path) -> Path:
     """Create a small synthetic CSV that mirrors the real dataset schema."""
-    import numpy as np
-
     rng = np.random.RandomState(42)
     n = 200
 
@@ -88,6 +87,19 @@ def test_full_pipeline(tmp_path: Path) -> None:
         assert key in metrics
         assert 0.0 <= metrics[key] <= 1.0
 
+    # Assert confusion matrix is present
+    assert "confusion_matrix" in metrics
+    cm = metrics["confusion_matrix"]
+    assert isinstance(cm, list)
+    assert len(cm) == 2
+
     # Assert artifacts were created
     assert (tmp_path / "metrics" / "metrics.json").exists()
     assert (tmp_path / "models" / "model.joblib").exists()
+
+    # Assert processed splits were saved
+    processed_dir = tmp_path / "processed"
+    assert (processed_dir / "x_train.csv").exists()
+    assert (processed_dir / "x_test.csv").exists()
+    assert (processed_dir / "y_train.csv").exists()
+    assert (processed_dir / "y_test.csv").exists()

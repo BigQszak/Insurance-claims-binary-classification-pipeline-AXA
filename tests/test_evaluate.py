@@ -33,15 +33,15 @@ class TestComputeMetrics:
         y_pred = np.array([0, 1, 0, 0])
         metrics = compute_metrics(y_true, y_pred)
 
-        for value in metrics.values():
-            assert isinstance(value, float)
+        for key in ("accuracy", "precision", "recall", "f1"):
+            assert isinstance(metrics[key], float)
 
     def test_expected_keys(self) -> None:
         y_true = np.array([0, 1])
         y_pred = np.array([0, 1])
         metrics = compute_metrics(y_true, y_pred)
 
-        assert set(metrics.keys()) == {"accuracy", "precision", "recall", "f1"}
+        assert set(metrics.keys()) == {"accuracy", "precision", "recall", "f1", "confusion_matrix"}
 
     def test_partial_predictions(self) -> None:
         y_true = np.array([1, 1, 0, 0])
@@ -51,6 +51,18 @@ class TestComputeMetrics:
         assert metrics["accuracy"] == 0.5
         assert metrics["precision"] == 0.5
         assert metrics["recall"] == 0.5
+
+    def test_confusion_matrix_structure(self) -> None:
+        y_true = np.array([0, 0, 1, 1])
+        y_pred = np.array([0, 1, 0, 1])
+        metrics = compute_metrics(y_true, y_pred)
+
+        cm = metrics["confusion_matrix"]
+        assert isinstance(cm, list)
+        assert len(cm) == 2
+        assert len(cm[0]) == 2
+        # [[TN=1, FP=1], [FN=1, TP=1]]
+        assert cm == [[1, 1], [1, 1]]
 
 
 class TestSaveMetrics:
