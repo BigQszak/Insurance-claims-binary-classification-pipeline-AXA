@@ -164,27 +164,4 @@ uv run ruff format --check src/ tests/
 uv run pyright
 ```
 
-## Reproducibility
 
-- **Deterministic dependencies**: `uv.lock` pins every transitive dependency
-- **Seeded randomness**: All random operations use `config.model.random_seed` (global seeds + per-component seeds)
-- **Deterministic training**: `n_jobs=1` in LightGBM ensures thread-ordering does not introduce non-determinism
-- **Stratified splitting**: Train/test split preserves class distribution for imbalanced datasets
-- **Persisted splits**: Train/test data is saved to `data/processed/` so that `evaluate` uses the exact same data as `train`
-- **Docker**: Multi-stage Dockerfile reproduces the full runtime environment
-
-## Tooling Choices
-
-| Tool | Why |
-|---|---|
-| **uv** | Fast dependency resolver, deterministic lock file, replaces pip/virtualenv |
-| **Ruff** | Single Rust-based linter+formatter, replaces flake8+isort+black |
-| **Pyright** | Fast static type checker, catches type errors early |
-| **pytest** | Industry-standard testing with rich plugin ecosystem |
-| **Pydantic** | Type-safe config validation, prevents silent misconfiguration |
-| **Typer** | Minimal-boilerplate CLI framework with auto-generated help |
-| **LightGBM** | Fast, memory-efficient gradient boosting for tabular data |
-| **Optuna** | State-of-the-art Bayesian hyperparameter optimization |
-| **structlog** | Structured logging, switchable between dev console and production JSON format |
-
-> **Why not Airflow/Kedro/ZenML?** The pipeline is a single-model, single-shot training job. These frameworks add scheduling/registry/scaffolding infrastructure that would be disproportionate. The modular `src/` layout maps naturally onto DAG tasks if production orchestration is needed later.
