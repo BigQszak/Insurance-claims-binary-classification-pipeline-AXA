@@ -1,14 +1,20 @@
 """CLI entry-point for the AXA ML pipeline."""
 
+import random
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 import structlog
 import typer
 
-from axa_ml.config import load_config
+from axa_ml.config import PipelineConfig, load_config
 from axa_ml.data.download import download_dataset
-from axa_ml.pipeline import run_pipeline
+from axa_ml.data.preprocessing import load_splits
+from axa_ml.model.evaluate import compute_metrics, log_metrics, save_metrics
+from axa_ml.model.train import load_model, optimize_hyperparameters, save_model, train_final_model
+from axa_ml.pipeline import load_and_preprocess, run_pipeline
+
 
 structlog.configure(
     processors=[
@@ -29,6 +35,12 @@ ConfigOption = Annotated[
 ]
 
 
+def _set_global_seeds(config: PipelineConfig) -> None:
+    """Set global seeds for standalone CLI commands."""
+    random.seed(config.model.random_seed)
+    np.random.seed(config.model.random_seed)
+
+
 @app.command()
 def run(
     config: ConfigOption = Path("configs/default.yaml"),
@@ -46,7 +58,13 @@ def download(
 ) -> None:
     """Download the dataset only."""
     cfg = load_config(config)
-    path = download_dataset(cfg.data.url, cfg.data.raw_dir, force=force)
+    path = download_dataset(
+        cfg.data.url,
+        cfg.data.raw_dir,
+        filename=cfg.data.dataset_filename,
+        rda_key=cfg.data.rda_key,
+        force=force,
+    )
     typer.echo(f"Dataset saved to {path}")
 
 
@@ -55,30 +73,10 @@ def train(
     config: ConfigOption = Path("configs/default.yaml"),
 ) -> None:
     """Train the model (assumes data is already downloaded)."""
-    import pandas as pd
-
-    from axa_ml.data.preprocessing import (
-        create_target,
-        drop_columns,
-        encode_categoricals,
-        split_data,
-    )
-    from axa_ml.model.train import optimize_hyperparameters, save_model, train_final_model
-
     cfg = load_config(config)
-    csv_path = Path(cfg.data.raw_dir) / "pg15training.csv"
-    if not csv_path.exists():
-        typer.echo("Data not found. Run `axa-ml download` first.", err=True)
-        raise typer.Exit(code=1)
+    _set_global_seeds(cfg)
 
-    df = pd.read_csv(csv_path)
-    df = create_target(df, cfg.features.target_column)
-    df = drop_columns(df, cfg.features.drop_columns)
-    df = encode_categoricals(df, cfg.features.categorical_columns)
-
-    x_train, _x_test, y_train, _y_test = split_data(
-        df, "target", cfg.model.test_size, cfg.model.random_seed
-    )
+    x_train, _x_test, y_train, _y_test = load_and_preprocess(cfg)
 
     best_params = optimize_hyperparameters(
         x_train,
@@ -96,42 +94,30 @@ def train(
 def evaluate(
     config: ConfigOption = Path("configs/default.yaml"),
 ) -> None:
-    """Evaluate a saved model on the test set."""
-    import pandas as pd
+    """Evaluate a saved model on the test set.
 
-    from axa_ml.data.preprocessing import (
-        create_target,
-        drop_columns,
-        encode_categoricals,
-        split_data,
-    )
-    from axa_ml.model.evaluate import compute_metrics, log_metrics, save_metrics
-    from axa_ml.model.train import load_model
-
+    Loads the pre-saved train/test splits from ``processed_dir`` to guarantee
+    that evaluation uses the exact same data split as training.
+    """
     cfg = load_config(config)
 
-    csv_path = Path(cfg.data.raw_dir) / "pg15training.csv"
     model_path = Path(cfg.artifacts.model_dir) / "model.joblib"
-
-    if not csv_path.exists():
-        typer.echo("Data not found. Run `axa-ml download` first.", err=True)
-        raise typer.Exit(code=1)
     if not model_path.exists():
         typer.echo("Model not found. Run `axa-ml train` first.", err=True)
         raise typer.Exit(code=1)
 
-    df = pd.read_csv(csv_path)
-    df = create_target(df, cfg.features.target_column)
-    df = drop_columns(df, cfg.features.drop_columns)
-    df = encode_categoricals(df, cfg.features.categorical_columns)
-
-    _x_train, x_test, _y_train, y_test = split_data(
-        df, "target", cfg.model.test_size, cfg.model.random_seed
-    )
+    try:
+        _x_train, x_test, _y_train, y_test = load_splits(cfg.data.processed_dir)
+    except FileNotFoundError:
+        typer.echo(
+            "Processed splits not found. Run `axa-ml run` or `axa-ml train` first.",
+            err=True,
+        )
+        raise typer.Exit(code=1)  # noqa: B904
 
     model = load_model(model_path)
     y_pred = model.predict(x_test)
-    metrics = compute_metrics(y_test, y_pred)  # pyright: ignore[reportArgumentType]  # predict() always returns ndarray
+    metrics = compute_metrics(y_test, y_pred)  # pyright: ignore[reportArgumentType]
     log_metrics(metrics)
     save_metrics(metrics, cfg.artifacts.metrics_dir)
     typer.echo(f"Evaluation complete. Metrics: {metrics}")

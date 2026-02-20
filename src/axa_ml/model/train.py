@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import numpy as np
 import optuna
 import pandas as pd
 import structlog
@@ -27,12 +26,12 @@ def _create_objective(
 
     def objective(trial: optuna.Trial) -> float:
         x_tr, x_val, y_tr, y_val = train_test_split(
-            x_train, y_train, test_size=0.2, random_state=random_seed
+            x_train, y_train, test_size=0.2, random_state=random_seed, stratify=y_train
         )
 
         params = {
             "objective": "binary",
-            "n_jobs": -1,
+            "n_jobs": 1,
             "verbosity": -1,
             "n_estimators": trial.suggest_int("n_estimators", *hp_space.n_estimators),
             "learning_rate": trial.suggest_float(
@@ -111,26 +110,25 @@ def train_final_model(
     Returns:
         Fitted ``LGBMClassifier``.
     """
-    np.random.seed(random_seed)
-    model = LGBMClassifier(**best_params, verbosity=-1, random_state=random_seed)
+    model = LGBMClassifier(**best_params, verbosity=-1, n_jobs=1, random_state=random_seed)
     model.fit(x_train, y_train)
     logger.info("model_trained", n_features=x_train.shape[1])
     return model
 
 
-def save_model(model: LGBMClassifier, path: str | Path) -> Path:
+def save_model(model: LGBMClassifier, output_dir: str | Path) -> Path:
     """Persist a trained model to disk using joblib.
 
     Args:
         model: Fitted model.
-        path: Directory to save the model file into.
+        output_dir: Directory to save the model file into.
 
     Returns:
         Path to the saved model file.
     """
-    path = Path(path)
-    path.mkdir(parents=True, exist_ok=True)
-    filepath = path / "model.joblib"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filepath = output_dir / "model.joblib"
     joblib.dump(model, filepath)
     logger.info("model_saved", path=str(filepath))
     return filepath
